@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f4f6fb; font-family: 'Segoe UI', sans-serif; }
+    .navbar { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .navbar-brand { color: #fff !important; font-weight: 700; font-size: 1.2rem; }
+    .section-title { font-weight: 700; color: #4a3f6b; margin-bottom: 16px; }
+    .alert-card { border-left: 5px solid #ccc; border-radius: 10px; margin-bottom: 12px; }
+    .alert-card.high   { border-left-color: #e74c3c; background: #fff5f5; }
+    .alert-card.medium { border-left-color: #f39c12; background: #fffbf0; }
+    .alert-card.low    { border-left-color: #27ae60; background: #f0fff5; }
+    .badge-high   { background: #e74c3c; color: #fff; }
+    .badge-medium { background: #f39c12; color: #fff; }
+    .badge-low    { background: #27ae60; color: #fff; }
+    .ack-btn { font-size: 13px; }
+    .drift-bar { height: 8px; border-radius: 4px; background: #e0d7f5; overflow: hidden; }
+    .drift-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 4px; }
+    .summary-card { background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+    .summary-card .label { font-size: 12px; font-weight: 700; color: #8a7faa; text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-card .value { font-size: 15px; font-weight: 600; color: #333; margin-bottom: 12px; }
+    .narrative-box { background: #f8f6ff; border-radius: 10px; padding: 16px; font-size: 15px; line-height: 1.7; color: #4a3f6b; margin: 8px 0 16px; }
+    .action-badge { padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 13px; }
+    .action-no_action     { background: #d5f5e3; color: #1e8449; }
+    .action-monitor_closely { background: #fef9e7; color: #b7950b; }
+    .action-schedule_checkin { background: #fdebd0; color: #ba4a00; }
+    .action-escalate { background: #fadbd8; color: #922b21; }
+    #summaryResult { display: none; }
+    #historyResult { display: none; }
+    .spinner-border-sm { width: 1rem; height: 1rem; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg mb-4">
+  <div class="container">
+    <span class="navbar-brand">🏫 Teacher Dashboard</span>
+    <span class="text-white opacity-75" style="font-size:13px;">Voice Emotion Check-in System</span>
+  </div>
+</nav>
+
+<div class="container pb-5">
+
+  <!-- ── Active Alerts ──────────────────────────────────────────────────────── -->
+  <h2 class="section-title">🚨 Active Safeguarding Alerts</h2>
+
+  {% if alerts %}
+    <div id="alertsList">
+      {% for alert in alerts %}
+      <div class="card alert-card {{ alert.severity }}" id="alert-{{ alert.id }}">
+        <div class="card-body d-flex justify-content-between align-items-start">
+          <div>
+            <span class="badge badge-{{ alert.severity }} rounded-pill mb-1">
+              {{ alert.severity | upper }}
+            </span>
+            <div class="fw-semibold mt-1">Session: <code>{{ alert.session_id }}</code></div>
+            <div class="text-muted" style="font-size:13px;">
+              {{ alert.triggered_at[:16].replace('T', ' ') if alert.triggered_at else '' }}
+            </div>
+            <div class="mt-2" style="font-size:14px;">{{ alert.reason }}</div>
+          </div>
+          <button class="btn btn-outline-secondary ack-btn mt-1"
+                  onclick="acknowledgeAlert('{{ alert.id }}', this)">
+            Acknowledge
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="alert alert-success rounded-3">
+      All clear — no active safeguarding alerts.
+    </div>
+  {% endif %}
+
+  <hr class="my-5">
+
+  <!-- ── Emotional History ──────────────────────────────────────────────────── -->
+  <h2 class="section-title">📊 Session Emotional History</h2>
+  <div class="row g-2 mb-3">
+    <div class="col-auto">
+      <input type="text" id="historySessionId" class="form-control"
+             placeholder="Enter session ID" style="width:280px;">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary" onclick="loadHistory()">Load History</button>
+    </div>
+  </div>
+  <div id="historyResult">
+    <table class="table table-hover bg-white rounded-3 overflow-hidden shadow-sm">
+      <thead class="table-light">
+        <tr>
+          <th>Date</th>
+          <th>Emotion</th>
+          <th>Sentiment</th>
+          <th>Score</th>
+          <th style="width:160px;">Drift</th>
+        </tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </div>
+
+  <hr class="my-5">
+
+  <!-- ── Weekly Summary ────────────────────────────────────────────────────── -->
+  <h2 class="section-title">📝 Weekly Emotional Summary</h2>
+  <div class="row g-2 mb-3">
+    <div class="col-auto">
+      <input type="text" id="summarySessionId" class="form-control"
+             placeholder="Enter session ID" style="width:280px;">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary" id="summaryBtn" onclick="loadSummary()">
+        Generate Summary
+      </button>
+    </div>
+  </div>
+  <div id="summaryResult" class="summary-card">
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="label">Session</div>
+        <div class="value" id="s-session"></div>
+
+        <div class="label">Period</div>
+        <div class="value" id="s-period"></div>
+
+        <div class="label">Sentiment Arc</div>
+        <div class="value" id="s-arc"></div>
+
+        <div class="label">Arc Explanation</div>
+        <div class="value" id="s-arcExpl"></div>
+
+        <div class="label">Avg Drift Score</div>
+        <div class="value" id="s-drift"></div>
+      </div>
+      <div class="col-md-6">
+        <div class="label">Dominant Emotions</div>
+        <div class="value" id="s-emotions"></div>
+
+        <div class="label">CASEL Patterns</div>
+        <div class="value" id="s-casel"></div>
+
+        <div class="label">Safeguarding Highlights</div>
+        <div class="value" id="s-safeguarding"></div>
+
+        <div class="label">Recommended Action</div>
+        <div class="value" id="s-action"></div>
+
+        <div class="label">Rationale</div>
+        <div class="value" id="s-rationale"></div>
+      </div>
+    </div>
+
+    <div class="label mt-2">Narrative Summary</div>
+    <div class="narrative-box" id="s-narrative"></div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+  async function acknowledgeAlert(alertId, btn) {
+    btn.disabled = true;
+    btn.textContent = "Acknowledging…";
+    try {
+      const res = await fetch("/teacher/acknowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alert_id: alertId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const card = document.getElementById("alert-" + alertId);
+        card.style.opacity = "0.4";
+        btn.textContent = "✓ Done";
+      } else {
+        btn.disabled = false;
+        btn.textContent = "Acknowledge";
+      }
+    } catch {
+      btn.disabled = false;
+      btn.textContent = "Acknowledge";
+    }
+  }
+
+  async function loadHistory() {
+    const sessionId = document.getElementById("historySessionId").value.trim();
+    if (!sessionId) return;
+    const tbody = document.getElementById("historyBody");
+    tbody.innerHTML = "<tr><td colspan='5' class='text-center text-muted'>Loading…</td></tr>";
+    document.getElementById("historyResult").style.display = "block";
+    try {
+      const res = await fetch("/teacher/history?session_id=" + encodeURIComponent(sessionId));
+      const entries = await res.json();
+      if (entries.error || entries.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='5' class='text-muted'>No entries found.</td></tr>";
+        return;
+      }
+      tbody.innerHTML = entries.map(e => {
+        const drift = e.drift_score;
+        const driftPct = drift !== null ? Math.round(drift * 100) : 0;
+        const driftBar = drift !== null
+          ? `<div class="drift-bar"><div class="drift-fill" style="width:${driftPct}%"></div></div>
+             <small class="text-muted">${drift.toFixed(3)}</small>`
+          : '<small class="text-muted">—</small>';
+        return `<tr>
+          <td>${(e.created_at || "").substring(0, 10)}</td>
+          <td class="text-capitalize">${e.emotion || "—"}</td>
+          <td class="text-capitalize">${e.sentiment || "—"}</td>
+          <td>${e.sentiment_score !== undefined ? e.sentiment_score.toFixed(2) : "—"}</td>
+          <td>${driftBar}</td>
+        </tr>`;
+      }).join("");
+    } catch {
+      tbody.innerHTML = "<tr><td colspan='5' class='text-danger'>Error loading data.</td></tr>";
+    }
+  }
+
+  async function loadSummary() {
+    const sessionId = document.getElementById("summarySessionId").value.trim();
+    if (!sessionId) return;
+    const btn = document.getElementById("summaryBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating…';
+
+    try {
+      const res = await fetch("/teacher/summary?session_id=" + encodeURIComponent(sessionId));
+      const data = await res.json();
+
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      document.getElementById("s-session").textContent = data.session_id || "—";
+      document.getElementById("s-period").textContent =
+        (data.period_start || "?") + " → " + (data.period_end || "?");
+      document.getElementById("s-arc").textContent =
+        (data.sentiment_arc || "—").toUpperCase();
+      document.getElementById("s-arcExpl").textContent = data.arc_explanation || "—";
+
+      const drift = data.avg_drift_score;
+      document.getElementById("s-drift").textContent =
+        drift !== null && drift !== undefined ? drift.toFixed(3) : "N/A";
+
+      document.getElementById("s-emotions").textContent =
+        Array.isArray(data.dominant_emotions) ? data.dominant_emotions.join(", ") : "—";
+      document.getElementById("s-casel").textContent =
+        Array.isArray(data.casel_patterns) ? data.casel_patterns.join(", ") : "—";
+      document.getElementById("s-safeguarding").textContent =
+        data.safeguarding_highlights || "None this week";
+      document.getElementById("s-narrative").textContent = data.narrative_summary || "—";
+
+      const action = (data.recommended_action || "no_action");
+      document.getElementById("s-action").innerHTML =
+        `<span class="action-badge action-${action}">${action.replace(/_/g, " ").toUpperCase()}</span>`;
+      document.getElementById("s-rationale").textContent =
+        data.recommended_action_rationale || "—";
+
+      document.getElementById("summaryResult").style.display = "block";
+    } catch {
+      alert("Error generating summary. Please try again.");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Generate Summary";
+    }
+  }
+</script>
+</body>
+</html>

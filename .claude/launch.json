@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "voice-emotion",
+      "runtimeExecutable": "/Users/macbook/Voice Emotion/project/bin/python",
+      "runtimeArgs": ["/Users/macbook/Voice Emotion/app.py"],
+      "port": 5000,
+      "autoPort": true
+    }
+  ]
+}

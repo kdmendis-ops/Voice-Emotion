@@ -1,0 +1,7 @@
+langgraph
+supabase
+google-genai
+python-dotenv
+sounddevice
+soundfile
+flask
