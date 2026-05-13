@@ -166,6 +166,8 @@
   async function acknowledgeAlert(alertId, btn) {
     btn.disabled = true;
     btn.textContent = "Acknowledging…";
+    const errEl = btn.parentElement.querySelector(".ack-error");
+    if (errEl) errEl.remove();
     try {
       const res = await fetch("/teacher/acknowledge", {
         method: "POST",
@@ -179,11 +181,21 @@
         btn.textContent = "✓ Done";
       } else {
         btn.disabled = false;
-        btn.textContent = "Acknowledge";
+        btn.textContent = "Retry";
+        const err = document.createElement("div");
+        err.className = "ack-error text-danger mt-1";
+        err.style.fontSize = "12px";
+        err.textContent = "Failed to acknowledge — please try again.";
+        btn.parentElement.appendChild(err);
       }
     } catch {
       btn.disabled = false;
-      btn.textContent = "Acknowledge";
+      btn.textContent = "Retry";
+      const err = document.createElement("div");
+      err.className = "ack-error text-danger mt-1";
+      err.style.fontSize = "12px";
+      err.textContent = "Network error — please try again.";
+      btn.parentElement.appendChild(err);
     }
   }
 

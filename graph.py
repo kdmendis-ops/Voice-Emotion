@@ -241,3 +241,21 @@ _audio_builder.add_edge("score_drift", "flag_agent")
 _audio_builder.add_edge("flag_agent", "save")
 _audio_builder.add_edge("save", END)
 audio_graph = _audio_builder.compile()
+
+# ── Post-audio graph (web): START → embed → retrieve_context → score_drift → flag_agent → save → END
+# Used by the web /check-in route after analyze_emotion_from_audio has already populated the state.
+# Skips analyze_node so the audio model's emotion/prosody analysis is preserved.
+
+_post_audio_builder = StateGraph(EmotionState)
+_post_audio_builder.add_node("embed", embed_node)
+_post_audio_builder.add_node("retrieve_context", retrieve_context_node)
+_post_audio_builder.add_node("score_drift", score_drift_node)
+_post_audio_builder.add_node("flag_agent", flag_agent_node)
+_post_audio_builder.add_node("save", save_node)
+_post_audio_builder.add_edge(START, "embed")
+_post_audio_builder.add_edge("embed", "retrieve_context")
+_post_audio_builder.add_edge("retrieve_context", "score_drift")
+_post_audio_builder.add_edge("score_drift", "flag_agent")
+_post_audio_builder.add_edge("flag_agent", "save")
+_post_audio_builder.add_edge("save", END)
+post_audio_graph = _post_audio_builder.compile()

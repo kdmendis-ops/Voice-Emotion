@@ -105,7 +105,7 @@ def get_unacknowledged_alerts() -> list[dict]:
     return result.data
 
 
-def get_session_emotional_history(session_id: str, limit: int = 7) -> list[dict]:
+def get_session_emotional_history(session_id: str, limit: int = 14) -> list[dict]:
     history = get_history(session_id)
     recent = history[-limit:] if len(history) >= limit else history
     return [

@@ -1,13 +1,14 @@
 import os
 import subprocess
 import tempfile
+import traceback
 import uuid
 
 from flask import Flask, render_template, request, jsonify
 
 import gemini_client
 import supabase_client
-from graph import text_graph
+from graph import text_graph, post_audio_graph
 
 app = Flask(__name__)
 
@@ -63,15 +64,24 @@ def check_in():
             check=True, capture_output=True,
         )
 
-        # Transcribe + first-pass emotion via Gemini (also deletes wav_path)
+        # Transcribe + emotion via Gemini audio model (also deletes wav_path)
         audio_result = gemini_client.analyze_emotion_from_audio(wav_path)
         wav_path = None  # deleted inside analyze_emotion_from_audio
 
-        # Run the rest of the pipeline (embed → retrieve_context → drift → flag → save)
+        # Populate state with all audio analysis fields so the post-audio pipeline
+        # skips re-analysis and preserves the audio model's prosody-aware results.
         state = _initial_state(session_id)
         state["user_input"] = audio_result["transcript"]
         state["transcript"] = audio_result["transcript"]
-        final_state = text_graph.invoke(state)
+        state["emotion"] = audio_result["emotion"]
+        state["casel_competency"] = audio_result["casel_competency"]
+        state["gemini_response"] = audio_result.get("response", "")
+        state["sentiment"] = audio_result["sentiment"]
+        state["sentiment_score"] = audio_result["sentiment_score"]
+        state["keywords"] = audio_result.get("keywords", [])
+
+        # Run embed → retrieve_context → score_drift → flag_agent → save
+        final_state = post_audio_graph.invoke(state)
 
         response_text = final_state.get("context_response") or final_state.get("gemini_response", "")
         return jsonify({
@@ -85,7 +95,9 @@ def check_in():
         })
 
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        tb = traceback.format_exc()
+        print(f"\n[check-in ERROR]\n{tb}")
+        return jsonify({"error": str(exc), "traceback": tb}), 500
 
     finally:
         if webm_path and os.path.exists(webm_path):
