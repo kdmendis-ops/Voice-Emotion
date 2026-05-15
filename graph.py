@@ -2,7 +2,6 @@ from typing_extensions import TypedDict
 from langgraph.graph import START, END, StateGraph
 import gemini_client
 import supabase_client
-import audio_recorder
 
 
 class EmotionState(TypedDict):
@@ -48,6 +47,7 @@ def analyze_node(state: EmotionState) -> dict:
 
 def record_node(state: EmotionState) -> dict:
     """Record audio from the mic, transcribe via Gemini, and analyze emotion."""
+    import audio_recorder
     audio_path = audio_recorder.record_audio(duration_seconds=5)
     result = gemini_client.analyze_emotion_from_audio(audio_path)
     return {
