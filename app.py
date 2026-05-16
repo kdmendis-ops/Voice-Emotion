@@ -1,5 +1,4 @@
 import os
-import subprocess
 import tempfile
 import traceback
 import uuid
@@ -51,22 +50,14 @@ def check_in():
         return jsonify({"error": "No audio received"}), 400
 
     webm_path = None
-    wav_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
             audio_file.save(tmp.name)
             webm_path = tmp.name
 
-        wav_path = webm_path.replace(".webm", ".wav")
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", webm_path,
-             "-ar", "44100", "-ac", "1", wav_path],
-            check=True, capture_output=True,
-        )
-
-        # Transcribe + emotion via Gemini audio model (also deletes wav_path)
-        audio_result = gemini_client.analyze_emotion_from_audio(wav_path)
-        wav_path = None  # deleted inside analyze_emotion_from_audio
+        # Upload WebM directly to Gemini — audio/webm is a supported MIME type
+        audio_result = gemini_client.analyze_emotion_from_audio(webm_path)
+        webm_path = None  # deleted inside analyze_emotion_from_audio
 
         # Populate state with all audio analysis fields so the post-audio pipeline
         # skips re-analysis and preserves the audio model's prosody-aware results.
@@ -102,8 +93,6 @@ def check_in():
     finally:
         if webm_path and os.path.exists(webm_path):
             os.remove(webm_path)
-        if wav_path and os.path.exists(wav_path):
-            os.remove(wav_path)
 
 
 # ── Teacher dashboard ─────────────────────────────────────────────────────────
